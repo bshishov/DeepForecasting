@@ -1,0 +1,13 @@
+{
+  "epochs": 1000,
+  "batch_size": 64,
+  "window_size": 512,
+  "return_sequences": true,
+  "scaler": "processing.StandardScaler",
+  "model": "models.conv_models.wavenet",
+  "model_args": {
+    "loss": "dodge",
+    "num_filters": 8,
+    "blocks": 9
+  }
+}

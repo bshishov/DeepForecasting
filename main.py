@@ -1,15 +1,11 @@
 import argparse
-import numpy as np
 import csv
 
+import numpy as np
+
+import utils
 from genetic import GeneticAlgorithm
-from model import create_model, huber_loss_mean
-from utils import mean_squared_error, mean_absolute_error, split, StandardScaler, SequenceScaler, MinMaxScaler, NoScaler
-
-
-def scaled_grads(a: np.ndarray, axis: int = 0):
-    grads = np.gradient(a, axis=axis)
-    return (grads - grads.mean()) / (grads.std() + 1e-10)
+from models.model import create_model, huber_loss_mean
 
 
 class Trainer(object):
@@ -28,49 +24,57 @@ class Trainer(object):
         num_derivatives = kwargs.pop('num_derivatives')
         epochs = kwargs.pop('epochs')
         batch_size = kwargs.pop('batch_size')
-        scaler_class = kwargs.pop('scaler_class', StandardScaler)
+        scaler_class = kwargs.pop('scaler_class', utils.StandardScaler)
 
-        train_split_size = 0.6
-
-        num_sequences = len(self.t_raw) - window_size + 1 - num_points_to_predict
-        t_seq = np.zeros((num_sequences, window_size, num_derivatives + 1))
-        t_seq_y = np.zeros((num_sequences, num_points_to_predict))
-        for i in range(num_sequences):
-            t_seq[i, :, 0] = self.t_raw[i:i + window_size]
-
-            for gi in range(num_derivatives):
-                t_seq[i, :, gi + 1] = np.gradient(t_seq[i, :, gi])
-
-            for pi in range(num_points_to_predict):
-                t_seq_y[i, pi] = self.t_raw[i + window_size + pi]
-
-        t_train, t_test = split(t_seq, ratio=train_split_size)
-        t_train_y, t_test_y = split(t_seq_y, ratio=train_split_size)
-
-        scaler_x = SequenceScaler(scaler_class)
-        scaler_x.fit(t_train)
-
-        scaler_y = scaler_class()
-        scaler_y.fit(t_train_y)
-
-        x_train = scaler_x.transform(t_train)
-        x_test = scaler_x.transform(t_test)
-
-        y_train = scaler_y.transform(t_train_y)
-        #y_test = scaler_y.transform(t_test_y)
+        overall_y_true = []
+        overall_y_pred = []
 
         # Training
         print('\n\nCreating model: \n\t{0}'.format(original_kwargs))
-        model = create_model(x_train.shape[1:], num_points_to_predict, **kwargs)
-        model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
+        model = create_model((window_size, num_derivatives + 1), num_points_to_predict, **kwargs)
+        model.save_weights('initial_weights.h5')
 
-        # Evaluating
-        y_pred_raw_output = model.predict(x_test)
-        y_pred = scaler_y.inverse_transform(y_pred_raw_output)
-        mse = mean_squared_error(t_test_y, y_pred)
-        mae = mean_absolute_error(t_test_y, y_pred)
+        for train_t, test_t in utils.roll_cv(self.t_raw, folds=4, backtrack_padding=window_size-1):
+            train_x, train_y = utils.as_sequences(train_t, window_size, num_derivatives, num_points_to_predict)
+            test_x, test_y = utils.as_sequences(test_t, window_size, num_derivatives, num_points_to_predict)
+
+            scaler_x = utils.SequenceScaler(scaler_class)
+            scaler_y = scaler_class()
+
+            train_x_scaled = scaler_x.fit_transform(train_x)
+            train_y_scaled = scaler_y.fit_transform(train_y)
+
+            test_x_scaled = scaler_x.transform(test_x)
+            test_y_scaled = scaler_y.transform(test_y)
+
+            print('Fitting')
+            model.fit(train_x_scaled, train_y_scaled, epochs=epochs, batch_size=batch_size, verbose=0)
+
+            pred_y_scaled = model.predict(test_x_scaled)
+            pred_y = scaler_y.inverse_transform(pred_y_scaled)
+
+            overall_y_true.append(test_y)
+            overall_y_pred.append(pred_y)
+
+            print('Reset weights')
+            model.load_weights('initial_weights.h5')
+
+        all_y_true = np.concatenate(overall_y_true)
+        all_y_pred = np.concatenate(overall_y_pred)
+        mse = utils.mean_squared_error(all_y_true, all_y_pred)
+        mae = utils.mean_absolute_error(all_y_true, all_y_pred)
+
+        print('MSE', mse)
+        print('MAE', mae)
 
         fitness = -mse
+
+        import matplotlib.pyplot as plt
+        plt.plot(all_y_pred[:, 0], label='Predicted')
+        plt.plot(all_y_true[:, 0], label='True')
+        plt.grid()
+        plt.legend()
+        plt.show()
 
         log_kwargs = original_kwargs.copy()
         log_kwargs.update({'mse': mse, 'mae': mae})
@@ -112,13 +116,34 @@ def main(arguments):
         'batch_size': [32, 64, 128, 256],
         'window_size': [5, 10, 20, 30, 40, 50],
         'num_derivatives': [0, 1, 2, 3, 4, 5],
-        'scaler_class': [StandardScaler, MinMaxScaler, NoScaler],
+        'scaler_class': [utils.StandardScaler, utils.MinMaxScaler, utils.NoScaler],
         'num_points_to_predict': [1, 2, 3]
     }, trainer.fitness, hall_of_fame=100)
+
+    kwargs = ga.get_kwargs(ga.sample())
+
+    kwargs['scaler_class'] = utils.StandardScaler
+    kwargs['epochs'] = 10
+    kwargs['model_arch'] = 'conv'
+    kwargs['num_derivatives'] = 3
+    kwargs['window_size'] = 30
+    kwargs['epochs'] = 40
+    kwargs['loss'] = huber_loss_mean
+    kwargs['use_max_pooling'] = False
+    kwargs['conv_filters'] = 64
+    kwargs['conv_layers'] = 2
+    kwargs['optimizer'] = 'adam'
+    kwargs['batch_size'] = 128
+    kwargs['num_points_to_predict'] = 1
+    kwargs['activation'] = 'relu'
+    kwargs['conv_filter_size'] = 5
+
+    #trainer.fitness(**kwargs)
+
     ga.run(100, 100)
 
-    with open(arguments.log, 'a') as f:
-        f.write('{0}'.format(ga.hall_of_fame))
+    #with open(arguments.log, 'a') as f:
+     #   f.write('{0}'.format(ga.hall_of_fame))
 
 
 if __name__ == '__main__':

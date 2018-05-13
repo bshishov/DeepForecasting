@@ -1,0 +1,9 @@
+{
+  "epochs": 1000,
+  "batch_size": 64,
+  "window_size": 128,
+  "return_sequences": true,
+  "scaler": null,
+  "model": "models.wavenet.wavenet",
+  "model_args": {}
+}

@@ -1,0 +1,15 @@
+{
+  "epochs": 1000,
+  "batch_size": 64,
+  "window_size": 30,
+  "return_sequences": false,
+  "num_derivatives": 2,
+  "deepcast_derivatives": true,
+  "scaler": "processing.StandardScaler",
+  "model": "models.conv_models.deepcast_mod",
+  "model_args": {
+    "causal": false,
+    "dilated": true,
+    "seq2seq": false
+  }
+}

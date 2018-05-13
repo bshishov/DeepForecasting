@@ -78,3 +78,10 @@ def create_model(input_shape: tuple, outputs: int, **kwargs):
     model.compile(optimizer=optimizer, loss=loss)
     #model.compile(optimizer=optimizer, loss=loss, metrics=['mse', 'mae', 'mape'])
     return model
+
+
+def reset_weights(model):
+    session = keras.backend.get_session()
+    for layer in model.layers:
+        if hasattr(layer, 'kernel_initializer'):
+            layer.kernel.initializer.run(session=session)

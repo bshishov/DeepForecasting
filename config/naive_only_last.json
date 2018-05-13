@@ -1,0 +1,14 @@
+{
+  "epochs": 4,
+  "batch_size": 64,
+  "window_size": 30,
+  "return_sequences": false,
+  "train_test_split": 0.9,
+  "scaler": null,
+  "patience": 2,
+  "shuffle": false,
+  "model": "models.naive.naive_model",
+  "model_args": {
+    "return_sequences": false
+  }
+}

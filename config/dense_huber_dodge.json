@@ -1,0 +1,13 @@
+{
+  "epochs": 1000,
+  "batch_size": 64,
+  "window_size": 30,
+  "return_sequences": false,
+  "scaler": "processing.StandardScaler",
+  "model": "models.naive.dense",
+  "model_args": {
+    "use_bias": true,
+    "return_sequences": false,
+    "loss": "huber_dodge"
+  }
+}

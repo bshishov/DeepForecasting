@@ -1,0 +1,16 @@
+{
+  "epochs": 1000,
+  "batch_size": 64,
+  "window_size": 30,
+  "return_sequences": false,
+  "scaler": null,
+  "model": "models.conv_models.dcc_generic",
+  "model_args": {
+    "num_blocks": 6,
+    "num_in_conv": 1,
+    "num_out_conv": 1,
+    "return_sequences": false,
+    "merge_blocks": false,
+    "b_conv_residual": false
+  }
+}
